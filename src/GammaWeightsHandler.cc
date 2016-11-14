@@ -9,11 +9,14 @@ GammaWeightsHandler::GammaWeightsHandler(const edm::ParameterSet &runProcess,TSt
   bool isMC = runProcess.getParameter<bool>("isMC");
   if(forceAllToData) isMC=false;
   std::vector<std::string> gammaPtWeightsFiles =  runProcess.getParameter<std::vector<std::string> >("weightsFile");  
-  if(gammaPtWeightsFiles.size()==0) return;
+  if(gammaPtWeightsFiles.size()==0) {
+    std::cout << "Photon weights file not found! Pls check filename spelling or file path" << std::endl;
+    return;
+  }
   std::vector<TString> wgtNames; 
   wgtNames.push_back("qt");
   if(ewkSupWgt!="") wgtNames.push_back(ewkSupWgt);
-  TString wgtType( isMC ? "mcfitwgts" : "datafitfunctionwgts_norm"); //datafitwgtsrebin if ypu use bins, datafitfunctionwgts_norm if you use fitting functions
+  TString wgtType( isMC ? "mcfitwgts" : "datafitwgtsrebin"); //datafitwgtsrebin if ypu use bins, datafitfunctionwgts_norm if you use fitting functions
   TString massType( isMC ? "mczmass" : "zmass");
     
   //categories to consider, add more if needed but keep these ones 

@@ -9,15 +9,31 @@ if [[ $# -eq 0 ]]; then
     printf "\nSYNOPSIS\n"
     printf "\n\t%-5s\n" "./submit.sh [OPTION]" 
     printf "\nOPTIONS\n" 
+## Run 2l2vAnalysis over samples
     printf "\n\t%-5s  %-40s\n"  "0"  "completely clean up the directory" 
-    printf "\n\t%-5s  %-40s\n"  "1"  "run 'runHZZ2l2vAnalysis' on samples.json" 
-    printf "\n\t%-5s  %-40s\n"  "1.1"  "run 'runHZZ2l2vAnalysis' on photon_samples.json" 
-    printf "\n\t%-5s  %-40s\n"  "1.2"  "run 'runHZZ2l2vAnalysis' on photon_samples.json with photon re-weighting"
+    printf "\n\t%-5s  %-40s\n"  "1"  "run 'runHZZ2l2vAnalysis' on all samples" 
+    printf "\n\t%-5s  %-40s\n"  "1.0"  "make plots for mcbased analysis"
+    printf "\n\t%-5s  %-40s\n"  "1.1"  "run 'runHZZ2l2vAnalysis' on photon samples" 
+    printf "\n\t%-5s  %-40s\n"  "1.2"  "run 'runHZZ2l2vAnalysis' on photon samples with photon re-weighting"
+
+## Run photonZ closure tests:
+    printf "\n\t%-5s  %-40s\n"  "1.3"  "run 'runHZZ2l2vAnalysis' on photon and DY samples in MC only"
+    printf "\n\t%-5s  %-40s\n"  "1.4"  "run 'runHZZ2l2vAnalysis' on photon samples with photon re-weighting with MC weights"  
+
+## Merge Results
     printf "\n\t%-5s  %-40s\n"  "2"  "compute integrated luminosity from processed samples" 
     printf "\n\t%-5s  %-40s\n"  "2.1"  "compute integrated luminosity from processed photon samples" 
-    printf "\n\t%-5s  %-40s\n"  "3"  "make plots and combine root files" 
-    printf "\n\t%-5s  %-40s\n"  "3.1"  "make plots for photon_samples" 
-    printf "\n\t%-5s  %-40s\n"  "3.2"  "make plots for photon_samples with photon re-weighting" 
+    printf "\n\t%-5s  %-40s\n"  "3.0"  "make plots and combine root files" 
+
+## Extract photon weights
+    printf "\n\t%-5s  %-40s\n"  "3.01" "extract photon weights using bins in data or MC" 
+
+## Make plots in mcbased(_blind), photons, datadriven(_blind) cases
+    printf "\n\t%-5s  %-40s\n"  "3.1"  "make plots for mcbased analysis"  
+    printf "\n\t%-5s  %-40s\n"  "3.15"  "make plots for photon_samples" 
+    printf "\n\t%-5s  %-40s\n"  "3.16"  "make plots for photonZ analysis MC closure tests"
+    printf "\n\t%-5s  %-40s\n"  "3.17"  "make plots for instr. MET and genuine Met"
+    printf "\n\t%-5s  %-40s\n"  "3.2"  "make plots with data-driven MET"
 fi
 
 step=$1   #variable that store the analysis step to run
@@ -30,11 +46,11 @@ if [[ $# -ge 4 ]]; then echo "Additional arguments will be considered: "$argumen
 # Global Variables
 #--------------------------------------------------
 
-SUFFIX=_2016_08_05
+SUFFIX=_2016_10_17
 
 #SUFFIX=$(date +"_%Y_%m_%d") 
 MAINDIR=$CMSSW_BASE/src/UserCode/llvv_fwk/test/hzz2l2v
-JSON=$MAINDIR/samples2016.json 
+JSON=$MAINDIR/samples_ichep2016.json 
 GOLDENJSON=$CMSSW_BASE/src/UserCode/llvv_fwk/data/json/
 RESULTSDIR=$MAINDIR/results$SUFFIX
 PLOTSDIR=$MAINDIR/plots${SUFFIX}
@@ -53,7 +69,7 @@ if [[ $JSON =~ "2016" ]]; then
 else
     pileup=datapileup_official  
 fi
-
+ 
 ################################################# STEPS between 0 and 1
 if [[ $step == 0 ]]; then   
         #analysis cleanup
@@ -80,10 +96,20 @@ if [[ $step > 0.999 &&  $step < 2 ]]; then
 
    if [[ $step == 1 || $step == 1.2 ]]; then        #submit jobs for 2l2v analysis with photon re-weighting
 	echo "JOB SUBMISSION for Photon + Jet analysis with photon re-weighting"                                                                        
-        runAnalysisOverSamples.py -e runHZZ2l2vAnalysis -j $JSON -o $RESULTSDIR -c $MAINDIR/../runAnalysis_cfg.py.templ -p "@data_pileup="$pileup" @useMVA=True @saveSummaryTree=True @weightsFile=$PWD/photonWeights_RunD.root @runSystematics=False @automaticSwitch=False @is2011=False @jacknife=0 @jacks=0" -s $queue --report True --key 2l2v_photonsOnly $arguments 
-   fi                              
+        runAnalysisOverSamples.py -e runHZZ2l2vAnalysis -j $JSON -o $RESULTSDIR -c $MAINDIR/../runAnalysis_cfg.py.templ -p "@data_pileup="$pileup" @useMVA=True @saveSummaryTree=True @weightsFile=$PWD/photonWeights_run2016.root @rhoWeightsFile=get_rho_weight.root  @runSystematics=False @automaticSwitch=False @is2011=False @jacknife=0 @jacks=0" -s $queue --report True --key 2l2v_photonsOnly $arguments 
+   fi    
+                     
+   if [[ $step == 1.3 ]]; then        #submit jobs for 2l2v analysis with photon re-weighting in MC 
+       echo "JOB SUBMISSION for Photon + Jet analysis with photon re-weighting in MC : step1"  
+       runAnalysisOverSamples.py -e runHZZ2l2vAnalysis -j $JSON -o $RESULTSDIR -c $MAINDIR/../runAnalysis_cfg.py.templ -p "@data_pileup="$pileup" @useMVA=True @saveSummaryTree=True @runSystematics=False @automaticSwitch=False @is2011=False @jacknife=0 @jacks=0" -s $queue --report True --key 2l2v_photonZ $arguments
+   fi
 
-	 if [[ $HOSTNAME =~ "iihe" ]]; then yes | big-submission $RESULTSDIR/FARM/inputs/big.cmd; fi
+   if [[ $step == 1.4 ]]; then        #submit jobs for 2l2v analysis with photon re-weighting in MC                                              
+        echo "JOB SUBMISSION for Photon + Jet analysis with photon re-weighting in MC : step2"                                                                          
+        runAnalysisOverSamples.py -e runHZZ2l2vAnalysis -j $JSON -o $RESULTSDIR -c $MAINDIR/../runAnalysis_cfg.py.templ -p "@data_pileup="$pileup" @useMVA=True  @saveSummaryTree=True @weightsFile=$PWD/photonWeights_run2016MC.root @runSystematics=False @automaticSwitch=False @is2011=False @jacknife=0 @jacks=0" -s $queue --report True --key 2l2v_mcphotonsOnly $arguments                                                                                                             
+   fi    
+
+   if [[ $HOSTNAME =~ "iihe" ]]; then yes | big-submission $RESULTSDIR/FARM/inputs/big.cmd; fi
 
  
 fi
@@ -149,13 +175,15 @@ if [[ $step > 2.999 && $step < 4 ]]; then
     fi        
    
     if [[ $step == 3 || $step == 3.01 ]]; then  # make plots and combine root files for photon + jet study    
-        extractPhotonWeights --inFile plotter.root --outFile photonWeights_RunDNew.root --outDir $PLOTSDIR/photonWeights --fitf true
+#        extractPhotonWeights --inFile plotter.root --outFile photonWeights_RunDNew.root --outDir $PLOTSDIR/photonWeights --fitf true
+#	extractPhotonWeights_UsingBins --inFile ${PLOTTER}.root --outFile photonWeights_run2016MC.root --outDir $PLOTSDIR/photonMCWeights --mode MC 
+	extractPhotonWeights_UsingBins --inFile ${PLOTTER}.root --outFile photonWeights_run2016.root --outDir $PLOTSDIR/photonWeights --mode DATA
     fi
 
 
     if [[ $step == 3 || $step == 3.1 ]]; then  # make plots and combine root files for mcbased study    
         runPlotter --iEcm 13 --iLumi $INTLUMI --inDir $RESULTSDIR/ --outDir $PLOTSDIR/mcbased/ --outFile ${PLOTTER}.root  --json $JSON --no2D --plotExt .png --plotExt .pdf  --key 2l2v_mcbased $arguments
-        runPlotter --iEcm 13 --iLumi $INTLUMI --inDir $RESULTSDIR/ --outDir $PLOTSDIR/mcbased_blind/ --outFile ${PLOTTER}.root  --json $JSON --no2D --plotExt .png --plotExt .pdf  --key 2l2v_mcbased --fileOption READ --blind 100 --only "(all|ll|mumu|ee|emu)(|eq0jets|geq1jets|vbf)_(met|metpuppi)" $arguments
+        runPlotter --iEcm 13 --iLumi $INTLUMI --inDir $RESULTSDIR/ --outDir $PLOTSDIR/mcbased_blind/ --outFile ${PLOTTER}.root  --json $JSON --no2D --plotExt .png --plotExt .pdf  --key 2l2v_mcbased --fileOption READ --blind 125 --only "(all|ll|mumu|ee|emu)(|eq0jets|geq1jets|vbf)_(met|metpuppi)" $arguments
         runPlotter --iEcm 13 --iLumi $INTLUMI --inDir $RESULTSDIR/ --outDir $PLOTSDIR/mcbased_blind/ --outFile ${PLOTTER}.root  --json $JSON --no2D --plotExt .png --plotExt .pdf  --key 2l2v_mcbased --fileOption READ --blind 325 --only "(all|ll|mumu|ee|emu)(|eq0jets|geq1jets|vbf)_mt" $arguments      
     fi
 
@@ -175,7 +203,7 @@ if [[ $step > 2.999 && $step < 4 ]]; then
     if [[ $step == 3 || $step == 3.16 ]]; then # make photonZ MC closure tests 
 	# make sure you have at least DY MC and gamma+jets_reweighted in plotter.root
 	echo "MAKE PLOTS for photonZ analysis closure test"
-	runPhotonZclosure --inFile ${PLOTTER}.root --outDir $PLOTSDIR/photonZclosure --mode MC
+	runPhotonZClosure --inFile ${PLOTTER}.root --outDir $PLOTSDIR/photonZclosure --mode MC
     fi
 
     if [[ $step == 3 || $step == 3.17 ]]; then  # make plots and combine root files for photon + jet study    
@@ -185,7 +213,7 @@ if [[ $step > 2.999 && $step < 4 ]]; then
 
     if [[ $step == 3 || $step == 3.2 ]]; then # make plots and combine root files for photon + jet study   
         runPlotter --iEcm 13 --iLumi $INTLUMI --inDir $RESULTSDIR/ --outDir $PLOTSDIR/datadriven/       --outFile ${PLOTTER}.root  --json $JSON --no2D --plotExt .png --plotExt .pdf  --key 2l2v_datadriven --fileOption READ $arguments
-        runPlotter --iEcm 13 --iLumi $INTLUMI --inDir $RESULTSDIR/ --outDir $PLOTSDIR/datadriven_blind/ --outFile ${PLOTTER}.root  --json $JSON --no2D --plotExt .png --plotExt .pdf  --key 2l2v_datadriven --fileOption READ --blind 100 --only "(all|ll|mumu|ee|emu)(|eq0jets|geq1jets|vbf)_(met|metpuppi)" $arguments
+        runPlotter --iEcm 13 --iLumi $INTLUMI --inDir $RESULTSDIR/ --outDir $PLOTSDIR/datadriven_blind/ --outFile ${PLOTTER}.root  --json $JSON --no2D --plotExt .png --plotExt .pdf  --key 2l2v_datadriven --fileOption READ --blind 125 --only "(all|ll|mumu|ee|emu)(|eq0jets|geq1jets|vbf)_(met|metpuppi)" $arguments
         runPlotter --iEcm 13 --iLumi $INTLUMI --inDir $RESULTSDIR/ --outDir $PLOTSDIR/datadriven_blind/ --outFile ${PLOTTER}.root  --json $JSON --no2D --plotExt .png --plotExt .pdf  --key 2l2v_datadriven --fileOption READ --blind 325 --only "(all|ll|mumu|ee|emu)(|eq0jets|geq1jets|vbf)_mt" $arguments
     fi
 

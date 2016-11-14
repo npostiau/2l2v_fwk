@@ -38,6 +38,7 @@
 #include "UserCode/llvv_fwk/interface/SmartSelectionMonitor.h"
 #include "UserCode/llvv_fwk/interface/TMVAUtils.h"
 #include "UserCode/llvv_fwk/interface/LeptonEfficiencySF.h"
+#include "UserCode/llvv_fwk/interface/PhotonEfficiencySF.h"
 #include "UserCode/llvv_fwk/interface/PDFInfo.h"
 #include "UserCode/llvv_fwk/interface/rochcor2015.h"
 #include "UserCode/llvv_fwk/interface/rochcor2016.h"
@@ -169,6 +170,16 @@ int main(int argc, char* argv[])
 
   std::vector<std::string> gammaPtWeightsFiles =  runProcess.getParameter<std::vector<std::string> >("weightsFile");      
   GammaWeightsHandler* gammaWgtHandler = (gammaPtWeightsFiles.size()>0 && gammaPtWeightsFiles[0]!="") ? new GammaWeightsHandler(runProcess,"",true) : NULL;
+
+  // Apply rho corrections to photon sample, to match the rho distribution in the dilepton one
+  std::vector<std::string> rhoWeightsFilePath = runProcess.getParameter<std::vector<std::string> >("rhoWeightsFile"); 
+
+  bool doRhoCorrections=true;    
+  if ( rhoWeightsFilePath.size()==0) {doRhoCorrections=false; }     
+  else if ( rhoWeightsFilePath[0]=="") {doRhoCorrections=false; }
+
+  TFile* rhoWeightsFile=NULL;  
+
   if(gammaWgtHandler)printf("gammaWgtHandler is activated\n");
 
   //HIGGS weights and uncertainties
@@ -253,11 +264,13 @@ int main(int argc, char* argv[])
 	gSystem->ExpandPathName(nrLineShapesFileUrl);
 	nrLineShapesFile=TFile::Open(nrLineShapesFileUrl);
       } else if( isMC_GG ){
-	TString nrLineShapesFileUrl(string(std::getenv("CMSSW_BASE"))+"/src/UserCode/llvv_fwk/data/weights/Weights_EWS_GGH_21June2016_AllInterferences.root"); 
+	TString nrLineShapesFileUrl(string(std::getenv("CMSSW_BASE"))+"/src/UserCode/llvv_fwk/data/weights/NR_weightsRun2.root");
+	//Weights_EWS_GGH_21June2016_AllInterferences.root"); 
 	gSystem->ExpandPathName(nrLineShapesFileUrl);
 	nrLineShapesFile=TFile::Open(nrLineShapesFileUrl);
       } else if( isMC_VBF ){
-        TString nrLineShapesFileUrl(string(std::getenv("CMSSW_BASE"))+"/src/UserCode/llvv_fwk/data/weights/Weights_EWS_VBF_21June2016_AllInterferences.root"); 
+        TString nrLineShapesFileUrl(string(std::getenv("CMSSW_BASE"))+"/src/UserCode/llvv_fwk/data/weights/Weights_EWS_VBF_21June2016_AllInterferences.root");
+	//Weights_EWS_VBF_21June2016_AllInterferences.root"); 
         gSystem->ExpandPathName(nrLineShapesFileUrl);
         nrLineShapesFile=TFile::Open(nrLineShapesFileUrl);
       }
@@ -382,9 +395,12 @@ int main(int argc, char* argv[])
   h->GetXaxis()->SetBinLabel(6,"#gamma"); 
 
   //pu control
-  mon.addHistogram( new TH1F( "nvtx",";Vertices;Events",50,0,50) ); 
-  mon.addHistogram( new TH1F( "nvtxraw",";Vertices;Events",50,0,50) ); 
-  mon.addHistogram( new TH1F( "rho",";#rho;Events",50,0,25) ); 
+  mon.addHistogram( new TH1F( "nvtx",";Vertices;Events",81, -0.5, 80.5)); //50,0,50) ); 
+  mon.addHistogram( new TH1F( "nvtxraw",";Vertices;Events",81, -0.5, 80.5 )); //50,0,50) ); 
+  mon.addHistogram( new TH1F( "rho",";#rho;Events",100,0,50) ); 
+
+  TH2F *hnvtx=(TH2F *) mon.addHistogram( new TH2F ("zpt_vs_nvtx",";zpt;#vertices", 100,0,1500,81, -0.5, 80.5) );                                                    
+  TH2F *hrho=(TH2F *) mon.addHistogram( new TH2F ("zpt_vs_rho",";zpt;rho", 100,0,1500,100, 0, 50) );    
 
   // photon control
   mon.addHistogram(new TH1F("npho",   ";Number of Photons;Events", 20, 0, 20) ); 
@@ -393,7 +409,9 @@ int main(int argc, char* argv[])
   mon.addHistogram(new TH1F("photonpt", ";Photon pT [GeV];Events", 500, 0, 1000) ); 
   mon.addHistogram(new TH1F("phopt", ";Photon pT [GeV];Events", 500, 0, 1000) ); 
   mon.addHistogram(new TH1F("phoeta", ";Photon pseudo-rapidity;Events", 50, 0, 5) );
-  mon.addHistogram(new TH1F("bosonnvtx", ";Photon #eta;Events", 50, 0, 50) );
+  mon.addHistogram(new TH1F("bosonnvtx", ";Photon #vertices;Events", 81, -0.5, 80.5) );
+  mon.addHistogram(new TH1F("bosonrho", ";Photon rho;Events",100,0,50) ); 
+
   mon.addHistogram(new TH1F("bosoneta", ";Photon #eta;Events", 100, -5, 5) );
   mon.addHistogram(new TH1F("bosonphi", ";Photon #phi;Events", 80, -4, 4) );
   mon.addHistogram(new TH1F("bosonphiHG", ";Photon #phi;Events", 800, -4, 4) );
@@ -436,6 +454,11 @@ int main(int argc, char* argv[])
   mon.addHistogram( new TH1F("csvc",     ";Combined Secondary Vertex;Jets",50,0.,1.) );
   mon.addHistogram( new TH1F("csvothers",";Combined Secondary Vertex;Jets",50,0.,1.) );
   mon.addHistogram( new TH1F("leadjetpt",    ";Transverse momentum [GeV];Events",50,0,1000) );
+
+  mon.addHistogram( new TH1F("leadjet_pt",    ";Transverse momentum [GeV];Events",50,0,1000) );  
+  mon.addHistogram( new TH1F("leadjet_eta",    ";Pseudo-rapidity;Events",25,0,5) );   
+  mon.addHistogram( new TH1F("leadjet_phi",    ";leadjet #phi;Events",80, -4, 4) );        
+
   mon.addHistogram( new TH1F("trailerjetpt", ";Transverse momentum [GeV];Events",50,0,1000) );
   mon.addHistogram( new TH1F("vbfjeteta",    ";Pseudo-rapidity;Events",25,0,5) );
   mon.addHistogram( new TH1F("fwdjeteta",    ";Pseudo-rapidity;Events",25,0,5) );
@@ -471,12 +494,12 @@ int main(int argc, char* argv[])
   mon.addHistogram( new TH1D( "balanceNM1",   ";E_{T}^{miss}/q_{T};Events", 25,0,2.5) );
   mon.addHistogram( new TH1F( "axialmet",     ";Axial missing transvere energy [GeV];Events", 50,-100,400) );
   mon.addHistogram( new TH1F( "axialmetNM1",   ";Axial missing transvere energy [GeV];Events", 50,-100,400) );
-  Double_t metaxis[]={0,5,10,15,20,25,30,35,40,45,50,55,60,70,80,90,100,125,150,175,200,250,300,400,500,600,700,800,900,1000,1500};
+  Double_t metaxis[]={0,5,10,15,20,25,30,35,40,45,50,55,60,70,80,90,100,125,150,175,200,250,300,400,500,600,700,800,900,1000};
   Int_t nmetAxis=sizeof(metaxis)/sizeof(Double_t);
   mon.addHistogram( new TH1F( "metpuppi",          ";Missing transverse energy [GeV];Events / GeV",nmetAxis-1,metaxis) ); //50,0,1000) );
   mon.addHistogram( new TH1F( "met",          ";Missing transverse energy [GeV];Events / GeV",nmetAxis-1,metaxis) ); //50,0,1000) );
   mon.addHistogram( new TH1F( "metNM1",        ";Missing transverse energy [GeV];Events / GeV",nmetAxis-1,metaxis) ); //50,0,1000) );
-  Double_t mtaxis[]={100,120,140,160,180,200,220,240,260,280,300,325,350,375,400,450,500,600,700,800,900,1000,1500,2000,2500,3000};
+  Double_t mtaxis[]={100,120,140,160,180,200,220,240,260,280,300,325,350,375,400,450,500,600,700,800,900,1000,1500,2000};
   Int_t nmtAxis=sizeof(mtaxis)/sizeof(Double_t);
   mon.addHistogram( new TH1F( "mt"  ,         ";Transverse mass [GeV];Events / GeV",nmtAxis-1,mtaxis) );
   mon.addHistogram( new TH1F( "mtNM1"  ,       ";Transverse mass [GeV];Events / GeV",nmtAxis-1,mtaxis) );
@@ -508,7 +531,6 @@ int main(int argc, char* argv[])
   mon.addHistogram( new TH1F( "mt_Outbtag125"  ,         ";Transverse mass [GeV];Events / GeV",nmtAxis-1,mtaxis) );
   mon.addHistogram( new TH1F( "mt_Outbveto125"  ,         ";Transverse mass [GeV];Events / GeV",nmtAxis-1,mtaxis) );
 
-
   mon.addHistogram( new TH1F( "mtfinal"  ,         ";Transverse mass [GeV];Events / GeV",nmtAxis-1,mtaxis) );
   mon.addHistogram( new TH1F( "metfinal",          ";Missing transverse energy [GeV];Events / GeV",nmetAxis-1,metaxis) ); //50,0,1000) );
   mon.addHistogram( new TH1F( "mindphijmetfinal",  ";min #Delta#phi(jet,E_{T}^{miss});Events",20,0,4) );
@@ -539,6 +561,7 @@ int main(int argc, char* argv[])
 	mon.addHistogram( new TH2F (TString("mt_shapes")+NRsuffix[nri]+varNames[ivar],";cut index;Transverse mass [GeV];Events",optim_Cuts1_met.size(),0,optim_Cuts1_met.size(), 160,150,1750) );     
 	mon.addHistogram( new TH2F (TString("met_shapes")+NRsuffix[nri]+varNames[ivar],";cut index;Missing transverse energy [GeV];Events",optim_Cuts1_met.size(),0,optim_Cuts1_met.size(),100 ,0,500) );     
 	TH2F *h=(TH2F *) mon.addHistogram( new TH2F ("mt_shapes_NRBctrl"+NRsuffix[nri]+varNames[ivar],";cut index;Selection region;Events",optim_Cuts1_met.size(),0,optim_Cuts1_met.size(),6,0,6) );
+
 	h->GetYaxis()->SetBinLabel(1,"M_{in}^{ll}/=0 b-tags");
 	h->GetYaxis()->SetBinLabel(2,"M_{out}^{ll}/=0 b-tags");
 	h->GetYaxis()->SetBinLabel(3,"M_{out+}^{ll}/=0 b-tags");
@@ -625,6 +648,9 @@ int main(int argc, char* argv[])
   //lepton efficiencies
   LeptonEfficiencySF lepEff;
 
+  //photon efficiencies
+  PhotonEfficiencySF phoEff;
+
   //b-tagging: beff and leff must be derived from the MC sample using the discriminator vs flavor
   //the scale factors are taken as average numbers from the pT dependent curves see:
   //https://twiki.cern.ch/twiki/bin/viewauth/CMS/BtagPOG#2012_Data_and_MC_EPS13_prescript
@@ -632,18 +658,32 @@ int main(int argc, char* argv[])
   float beff(0.68), sfb(0.99), sfbunc(0.015);
   float leff(0.13), sfl(1.05), sflunc(0.12);
 
-  double btagLoose = 0.605; //https://twiki.cern.ch/twiki/bin/viewauth/CMS/BtagRecommendation74X FIXME, I sent an email to Petra to know more (Hugo)
-  // setup calibration readers
-  BTagCalibration btagCalib("CSVv2", string(std::getenv("CMSSW_BASE"))+"/src/UserCode/llvv_fwk/data/weights/btagSF_CSVv2.csv");
-  BTagCalibrationReader btagCal   (&btagCalib, BTagEntry::OP_LOOSE, "mujets", "central");  // calibration instance, operating point, measurement type, systematics type
-  BTagCalibrationReader btagCalUp (&btagCalib, BTagEntry::OP_LOOSE, "mujets", "up"     );  // sys up
-  BTagCalibrationReader btagCalDn (&btagCalib, BTagEntry::OP_LOOSE, "mujets", "down"   );  // sys down
-  BTagCalibrationReader btagCalL  (&btagCalib, BTagEntry::OP_LOOSE, "comb", "central");  // calibration instance, operating point, measurement type, systematics type
-  BTagCalibrationReader btagCalLUp(&btagCalib, BTagEntry::OP_LOOSE, "comb", "up"     );  // sys up
-  BTagCalibrationReader btagCalLDn(&btagCalib, BTagEntry::OP_LOOSE, "comb", "down"   );  // sys down
+  //double btagLoose = 0.605; //https://twiki.cern.ch/twiki/bin/viewauth/CMS/BtagRecommendation74X FIXME, I sent an email to Petra to know more (Hugo)
+  double btagLoose = 0.460;  //80X recommendation Loose
+
+  // setup calibration readers 74X
+  //BTagCalibration btagCalib("CSVv2", string(std::getenv("CMSSW_BASE"))+"/src/UserCode/llvv_fwk/data/weights/btagSF_CSVv2.csv");
+  //BTagCalibrationReader btagCal   (&btagCalib, BTagEntry::OP_LOOSE, "mujets", "central");  // calibration instance, operating point, measurement type, systematics type
+  //BTagCalibrationReader btagCalUp (&btagCalib, BTagEntry::OP_LOOSE, "mujets", "up"     );  // sys up
+  //BTagCalibrationReader btagCalDn (&btagCalib, BTagEntry::OP_LOOSE, "mujets", "down"   );  // sys down
+  //BTagCalibrationReader btagCalL  (&btagCalib, BTagEntry::OP_LOOSE, "comb", "central");  // calibration instance, operating point, measurement type, systematics type
+  //BTagCalibrationReader btagCalLUp(&btagCalib, BTagEntry::OP_LOOSE, "comb", "up"     );  // sys up
+  //BTagCalibrationReader btagCalLDn(&btagCalib, BTagEntry::OP_LOOSE, "comb", "down"   );  // sys down
+
+  // setup calibration readers 80X
+  BTagCalibration btagCalib("CSVv2", string(std::getenv("CMSSW_BASE"))+"/src/UserCode/llvv_fwk/data/weights/CSVv2_ichep.csv");
+
+  BTagCalibrationReader80X btagCal80X   (BTagEntry::OP_LOOSE, "central", {"up", "down"});
+  btagCal80X.load(btagCalib, BTagEntry::FLAV_B, "comb");
+  btagCal80X.load(btagCalib, BTagEntry::FLAV_C, "comb");
+  btagCal80X.load(btagCalib, BTagEntry::FLAV_UDSG, "incl");
+
 
   // from Btag SF and eff from https://indico.cern.ch/event/437675/#preview:1629681
-  beff = 0.747; sfb = 0.899; //for Loose WP  //sfb is not actually used as it's taken from btagCal
+  // beff = 0.747; sfb = 0.899; //for Loose WP  //sfb is not actually used as it's taken from btagCal
+  //
+  beff = 0.836; sfb = 0.920; //for Loose WP  //sfb is from page 7 https://indico.cern.ch/event/557018/contributions/2246312/attachments/1310986/1961665/csvSF_rwt_July18th_2016.pdf 
+  leff = 0.139;  
 
   //pileup weighting
   edm::LumiReWeighting* LumiWeights = NULL;
@@ -1137,7 +1177,7 @@ int main(int argc, char* argv[])
             if(photonTrigger && (photon.pt()<(triggerThreshold) || photon.pt()>(triggerThresholdHigh+10)))continue;
 
 	    //Calibrate photon energy
-	    //PhotonEnCorrector.calibrate(photon, ev.eventAuxiliary().run(), edm::StreamID::invalidStreamID()); 
+	    PhotonEnCorrector.calibrate(photon, ev.eventAuxiliary().run(), edm::StreamID::invalidStreamID()); 
 
 	    //Removed all the phtons which are alsp reconstructed ad Electron and muons
             double minDRlg(9999.);
@@ -1215,15 +1255,34 @@ int main(int argc, char* argv[])
               //update according to the SF measured by BTV
               if(isMC){
                   int flavId=jet.partonFlavour();  double eta=jet.eta();
-                  if      (abs(flavId)==5){  btsfutil.modifyBTagsWithSF(hasCSVtag    , btagCal   .eval(BTagEntry::FLAV_B   , eta, jet.pt()), beff);
-                                             btsfutil.modifyBTagsWithSF(hasCSVtagUp  , btagCalUp .eval(BTagEntry::FLAV_B   , eta, jet.pt()), beff);
-                                             btsfutil.modifyBTagsWithSF(hasCSVtagDown, btagCalDn .eval(BTagEntry::FLAV_B   , eta, jet.pt()), beff);
-                  }else if(abs(flavId)==4){  btsfutil.modifyBTagsWithSF(hasCSVtag    , btagCal   .eval(BTagEntry::FLAV_C   , eta, jet.pt()), beff);
-                                             btsfutil.modifyBTagsWithSF(hasCSVtagUp  , btagCalUp .eval(BTagEntry::FLAV_C   , eta, jet.pt()), beff);
-                                             btsfutil.modifyBTagsWithSF(hasCSVtagDown, btagCalDn .eval(BTagEntry::FLAV_C   , eta, jet.pt()), beff);
-                  }else{                     btsfutil.modifyBTagsWithSF(hasCSVtag    , btagCalL  .eval(BTagEntry::FLAV_UDSG, eta, jet.pt()), leff);
-                                             btsfutil.modifyBTagsWithSF(hasCSVtagUp  , btagCalLUp.eval(BTagEntry::FLAV_UDSG, eta, jet.pt()), leff);
-                                             btsfutil.modifyBTagsWithSF(hasCSVtagDown, btagCalLDn.eval(BTagEntry::FLAV_UDSG, eta, jet.pt()), leff);
+		  btsfutil.SetSeed(ev.eventAuxiliary().event()*10 + ijet*10000);
+                  if      (abs(flavId)==5){  
+					//  74X recommendation
+					//     btsfutil.modifyBTagsWithSF(hasCSVtag    , btagCal   .eval(BTagEntry::FLAV_B   , eta, jet.pt()), beff);
+                                        //     btsfutil.modifyBTagsWithSF(hasCSVtagUp  , btagCalUp .eval(BTagEntry::FLAV_B   , eta, jet.pt()), beff);
+                                        //     btsfutil.modifyBTagsWithSF(hasCSVtagDown, btagCalDn .eval(BTagEntry::FLAV_B   , eta, jet.pt()), beff);
+                                        //  80X recommendation
+                                        btsfutil.modifyBTagsWithSF(hasCSVtag    , btagCal80X.eval_auto_bounds("central", BTagEntry::FLAV_B   , eta, jet.pt()), beff);
+                                        btsfutil.modifyBTagsWithSF(hasCSVtagUp  , btagCal80X.eval_auto_bounds("up", BTagEntry::FLAV_B   , eta, jet.pt()), beff);
+                                        btsfutil.modifyBTagsWithSF(hasCSVtagDown, btagCal80X.eval_auto_bounds("down", BTagEntry::FLAV_B   , eta, jet.pt()), beff);
+                  }else if(abs(flavId)==4){  
+					//  74X recommendation
+					//     btsfutil.modifyBTagsWithSF(hasCSVtag    , btagCal   .eval(BTagEntry::FLAV_C   , eta, jet.pt()), beff);
+					//     btsfutil.modifyBTagsWithSF(hasCSVtagUp  , btagCalUp .eval(BTagEntry::FLAV_C   , eta, jet.pt()), beff);
+					//     btsfutil.modifyBTagsWithSF(hasCSVtagDown, btagCalDn .eval(BTagEntry::FLAV_C   , eta, jet.pt()), beff);
+                                        //  80X recommendation
+			                btsfutil.modifyBTagsWithSF(hasCSVtag    , btagCal80X.eval_auto_bounds("central", BTagEntry::FLAV_C   , eta, jet.pt()), beff);
+                                        btsfutil.modifyBTagsWithSF(hasCSVtagUp  , btagCal80X.eval_auto_bounds("up", BTagEntry::FLAV_C   , eta, jet.pt()), beff);
+                                        btsfutil.modifyBTagsWithSF(hasCSVtagDown, btagCal80X.eval_auto_bounds("down", BTagEntry::FLAV_C   , eta, jet.pt()), beff);
+                  }else{                
+					//  74X recommendation 
+					//     btsfutil.modifyBTagsWithSF(hasCSVtag    , btagCalL  .eval(BTagEntry::FLAV_UDSG, eta, jet.pt()), leff);
+                                        //     btsfutil.modifyBTagsWithSF(hasCSVtagUp  , btagCalLUp.eval(BTagEntry::FLAV_UDSG, eta, jet.pt()), leff);
+                                        //     btsfutil.modifyBTagsWithSF(hasCSVtagDown, btagCalLDn.eval(BTagEntry::FLAV_UDSG, eta, jet.pt()), leff);
+                                        //  80X recommendation
+			                btsfutil.modifyBTagsWithSF(hasCSVtag    , btagCal80X.eval_auto_bounds("central", BTagEntry::FLAV_UDSG   , eta, jet.pt()), leff);
+                                        btsfutil.modifyBTagsWithSF(hasCSVtagUp  , btagCal80X.eval_auto_bounds("up", BTagEntry::FLAV_UDSG   , eta, jet.pt()), leff);
+                                        btsfutil.modifyBTagsWithSF(hasCSVtagDown, btagCal80X.eval_auto_bounds("down", BTagEntry::FLAV_UDSG   , eta, jet.pt()), leff);
                   }
               }
 
@@ -1313,6 +1372,9 @@ int main(int argc, char* argv[])
                        dilId *= selLeptons[ilep].pdgId();
                        int id(abs(selLeptons[ilep].pdgId()));
 		       if(is2016MC) {
+			   
+                           if(id==11)weight *= lepEff.getTrackingEfficiency( selLeptons[ilep].el.superCluster()->eta(), id).first; //Tracking eff 
+                           else if(id==13)weight *= lepEff.getTrackingEfficiency( selLeptons[ilep].eta(), id).first; //Tracking eff
                            weight *= isMC ? lepEff.getLeptonEfficiency( selLeptons[ilep].pt(), selLeptons[ilep].eta(), id,  id ==11 ? "tight"    : "tight"   ,patUtils::CutVersion::ICHEP16Cut ).first : 1.0; //ID 
                            weight *= isMC ? lepEff.getLeptonEfficiency( selLeptons[ilep].pt(), selLeptons[ilep].eta(), id,  id ==11 ? "tightiso" : "tightiso",patUtils::CutVersion::ICHEP16Cut ).first : 1.0; //ISO w.r.t ID
 		       } else if(isMC && !is2016MC){
@@ -1343,9 +1405,24 @@ int main(int argc, char* argv[])
                    std::vector<Float_t> photonVars;
                    photonVars.push_back(boson.pt());           
                    float photonWeightMain=1.0;
-                   if(L>0 && gammaWgtHandler)photonWeightMain=gammaWgtHandler->getWeightFor(photonVars,string(L==1?"ee":"mumu")+evCat);
-                   //if(L>0 && gammaWgtHandler)printf("Photon pT = %6.2f --> prescale=%6.2f weight=%6.2E forL=%i  cat=%s\n", boson.pt(), triggerPrescale, photonWeightMain, L, (string(L==1?"ee":"mumu")+evCat).Data());
-                   weight *= triggerPrescale * photonWeightMain;
+		   float photonRhoWeight=1.0;  
+                   if(L>0 && gammaWgtHandler) {
+		     photonWeightMain=gammaWgtHandler->getWeightFor(photonVars,string(L==1?"ee":"mumu")+evCat);
+		     
+		     if (doRhoCorrections) { 
+		       TString rhoWeightsFileUrl(rhoWeightsFilePath[0].c_str());
+		       gSystem->ExpandPathName(rhoWeightsFileUrl); 
+		       rhoWeightsFile=TFile::Open(rhoWeightsFileUrl); 
+ 
+		       if (rhoWeightsFile) {
+			 TH2D* h_rho_zpt_weight = (TH2D*)rhoWeightsFile->Get("h_rho_zpt_weight");
+			 photonRhoWeight=h_rho_zpt_weight->GetBinContent(h_rho_zpt_weight->FindBin(boson.pt(), rho)); 
+			 rhoWeightsFile->Close(); 
+		       }
+		     }
+		   }
+                   weight *= triggerPrescale * photonWeightMain * photonRhoWeight;
+		   if(is2016MC) weight *= phoEff.getPhotonEfficiency(selPhotons[0].pt(), selPhotons[0].superCluster()->eta(), "tight",patUtils::CutVersion::ICHEP16Cut ).first;
                }else{
                   continue;
                }
@@ -1367,6 +1444,7 @@ int main(int argc, char* argv[])
                bool passThirdLeptonVeto( selLeptons.size()==2 && extraLeptons.size()==0 );
                bool passBtags(nbtags==0); 
                bool passMinDphijmet( njets==0 || mindphijmet>0.5);
+
 
                if(dilId==22){
                    passMass=photonTrigger;
@@ -1413,12 +1491,14 @@ int main(int argc, char* argv[])
                   } // end Trigger efficiencies
 
 
-    
+		  mon.fillHisto("eventflow",  tags,0,weight);
 
-                  mon.fillHisto("eventflow",  tags,0,weight);
                   mon.fillHisto("nvtxraw",  tags,vtx.size(),weight/puWeight);
                   mon.fillHisto("nvtx",  tags,vtx.size(),weight);
                   mon.fillHisto("rho",  tags,rho,weight);
+
+		  mon.fillHisto("zpt_vs_nvtx",tags,boson.pt(),vtx.size(),1.0);
+		  mon.fillHisto("zpt_vs_rho",tags,boson.pt(),rho,1.0);
 
                   if(chTags.size()==0) continue;
                   mon.fillHisto("eventflow",  tags,1,weight);
@@ -1458,6 +1538,13 @@ int main(int argc, char* argv[])
                       if(passThirdLeptonVeto){
                         
                         mon.fillHisto("eventflow",tags,4,weight);
+
+			if (selJets.size()>0) {
+			  mon.fillHisto( "leadjet_pt",tags,selJets[0].pt(),weight);       
+			  mon.fillHisto( "leadjet_eta",tags,fabs(selJets[0].eta()),weight);
+			  mon.fillHisto( "leadjet_phi",tags,selJets[0].phi(),weight);
+			}
+
                         for(size_t ijet=0; ijet<selJets.size(); ijet++){
                           if(selJets[ijet].pt()<30 || fabs(selJets[ijet].eta())>2.5) continue;
 
@@ -1490,6 +1577,8 @@ int main(int argc, char* argv[])
                             mon.fillHisto( "metphi",tags,imet.phi(),weight);
                             mon.fillHisto( "metphiUnCor",tags,met.corP4(pat::MET::METCorrectionLevel::Type1).phi(),weight);
                             mon.fillHisto( "bosonnvtx",tags,vtx.size(),weight);                                                               
+			    mon.fillHisto( "bosonrho",tags,rho,weight); 
+
                             mon.fillHisto( "bosoneta",tags,boson.eta(),weight);                                                                                
                             mon.fillHisto( "bosonphi",tags,boson.phi(),weight);                                                               
                             mon.fillHisto( "bosonphiHG",tags,boson.phi(),weight);
@@ -1685,10 +1774,10 @@ int main(int argc, char* argv[])
 
                           //if(nri==0 && index==0)printf("%9i:%9lli SYST:%30s  Met=%8.3f mT=%8.3f  Weight=%6.2E\n",  ev.eventAuxiliary().run(), ev.eventAuxiliary().event(), varNames[ivar].Data(), imet.pt(), mt, weight ); 
 
-                          if(passBtags && !isZ_SB)mon.fillHisto(TString("mt_shapes_NRBctrl")+NRsuffix[nri]+varNames[ivar],tags,index, 0.5,shapeWeight);
+                          if(passBtags && passMass)mon.fillHisto(TString("mt_shapes_NRBctrl")+NRsuffix[nri]+varNames[ivar],tags,index, 0.5,shapeWeight);
                           if(passBtags && isZ_SB)mon.fillHisto(TString("mt_shapes_NRBctrl")+NRsuffix[nri]+varNames[ivar],tags,index, 1.5,shapeWeight);
                           if(passBtags && isZ_upSB)mon.fillHisto(TString("mt_shapes_NRBctrl")+NRsuffix[nri]+varNames[ivar],tags,index, 2.5,shapeWeight);
-                          if(!passBtags && !isZ_SB)mon.fillHisto(TString("mt_shapes_NRBctrl")+NRsuffix[nri]+varNames[ivar],tags,index, 3.5,shapeWeight);
+                          if(!passBtags && passMass)mon.fillHisto(TString("mt_shapes_NRBctrl")+NRsuffix[nri]+varNames[ivar],tags,index, 3.5,shapeWeight);
                           if(!passBtags && isZ_SB)mon.fillHisto(TString("mt_shapes_NRBctrl")+NRsuffix[nri]+varNames[ivar],tags,index, 4.5,shapeWeight);
                           if(!passBtags && isZ_upSB)mon.fillHisto(TString("mt_shapes_NRBctrl")+NRsuffix[nri]+varNames[ivar],tags,index, 5.5,shapeWeight);
 
@@ -1711,7 +1800,6 @@ int main(int argc, char* argv[])
   //scale all events by 1/N to avoid the initial loop to stupidly count the events
   //mon.Scale(1.0/totalNumEvent);
 
-  
   TString terminationCmd = "";
   //save control plots to file
   printf("Results save in local directory and moved to %s\n", outUrl.Data());
